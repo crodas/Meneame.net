@@ -74,6 +74,30 @@ class Post {
 		$db->commit();
 	}
 
+    function next()
+    {
+        $current  = current($this->results);
+        $this->id = $current->post_id; 
+		foreach(get_object_vars($current) as $var => $value) $this->$var = $value;
+		if ($this->src == 'im') {
+			$this->src = 'jabber';
+		}
+		$this->read = true;
+        next($this->results);
+		return true;
+    }
+
+    function bulk_read(array $ids)
+    {
+		global $db, $current_user;
+		if(($results = $db->get_results("SELECT".Post::SQL."WHERE post_id IN (".implode(',', $ids).") and user_id = post_user_id"))) {
+            $this->results = $results;
+            reset($this->results);
+            return TRUE;
+		}
+		return FALSE;
+    }
+
 	function read() {
 		global $db, $current_user;
 		$id = $this->id;

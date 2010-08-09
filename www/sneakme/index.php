@@ -217,12 +217,19 @@ function onLoad(lat, lng, zoom, icon) {
 			$answers = $db->get_results($sql);
 			if ($answers) {
 				$answer = new Post;
+                $ids    = array();
+				foreach ($answers as $dbanswer) {
+                    $ids[] = $dbanswer->post_id;
+                }
+
+                $answer->bulk_read($ids);
 				echo '<div style="padding-left: 40px; padding-top: 10px">'."\n";
 				//echo '<h3>'._('Respuestas').'</h3>';
 				echo '<ol class="comments-list">';
 				foreach ($answers as $dbanswer) {
-					$answer->id = $dbanswer->post_id;
-					$answer->read();
+					//$answer->id = $dbanswer->post_id;
+					//$answer->read();
+                    $answer->next();
 					echo '<li>';
 					$answer->print_summary();
 					echo '</li>';

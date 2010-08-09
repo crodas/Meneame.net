@@ -84,7 +84,7 @@ $globals['base_comment_url'] = 'c/';
 $globals['base_user_url'] = 'user/';
 
 //RewriteRule ^/notame(/.*)$ /sneakme/index.php$1 [L,NS]
-$globals['base_sneakme_url'] = 'notame/';
+$globals['base_sneakme_url'] = '';
 
 // Memcache, set hostname if enabled
 //$globals['memcache_host'] = 'localhost'; 
@@ -322,7 +322,7 @@ if(stripos(setlocale(LC_CTYPE, 0), "utf-8") === false) {
 }
 
 // There is another config file, this is called for defaults (used by mobile)
-if (! $globals['basic_config'] ) {
+if (!isset($globals['basic_config'])) {
 	define("mnmpath", dirname(__FILE__));
 	define("mnminclude", dirname(__FILE__).'/libs/');
 	ini_set("include_path", '.:'.mnminclude.':'.mnmpath);
