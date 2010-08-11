@@ -445,8 +445,63 @@ class Link {
 		return false;
 	}
 
+	function print_summary1($type='full', $karma_best_comment = 0, $show_tags = true) {
+		global $current_user, $current_user, $globals, $db;
+
+		if ($this->is_votable()) {
+			$this->voted = $this->vote_exists($current_user->user_id);
+			if (!$this->voted) $this->md5 = md5($current_user->user_id.$this->id.$this->randkey.$globals['user_ip']);
+		}
+
+        $this->total_votes   = $this->votes + $this->anonymous;
+		$this->permalink     = $this->get_permalink();
+		$this->rpermalink    = $this->get_relative_permalink();
+		$this->show_shakebox = $type != 'preview' && $this->title && $this->content 
+				&& ($this->votes > 0 || $current_user->user_id == $this->author);
+        $this->has_warning   = !(!$this->check_warn() || $this->is_discarded());
+        $this->is_editable   = $this->is_editable();
+        $this->url_str       = htmlentities(preg_replace('/^https*:\/\//', '', txt_shorter($this->url)));
+        $this->username_str  = ' <a href="'.get_user_uri($this->username, 'history').'">'.$this->username.'</a> ';
+        $this->print_date    = $globals['now'] - $this->date > 604800 || empty($_SERVER['HTTP_USER_AGENT']); // 7 days or user agent is empty
+        $this->thumb_url     = $this->has_thumb();
+        $this->content_txt   = text_to_html($this->content, 'links');
+        $this->is_editable   = $this->is_editable();
+        $this->is_map_editable = $this->is_map_editable();
+        $this->can_vote_negative = !$this->voted && $this->votes_enabled &&
+				$this->negatives_allowed($globals['link_id'] > 0) && 
+				$type != 'preview';
+
+
+        if ($karma_best_comment > 0 && $this->comments > 0 && $this->comments < 50 && $globals['now'] - $this->date < 86400) {
+            $this->best_comment = $db->get_row("select SQL_CACHE comment_id, comment_order, substr(comment_content, 1, 225) as content from comments where comment_link_id = $this->id and comment_karma > $karma_best_comment and comment_votes > 0 order by comment_karma desc limit 1");
+        } else {
+            $this->best_comment  = FALSE;
+        }
+
+		switch ($this->status) {
+			case 'queued': // another color box for not-published
+				$box_class = 'mnm-queued';
+				break;
+			case 'abuse': // another color box for discarded
+			case 'autodiscard': // another color box for discarded
+			case 'discard': // another color box for discarded
+				$box_class = 'mnm-discarded';
+				break;
+			case 'published': // default for published
+			default:
+				$box_class = 'mnm-published';
+				break;
+		}
+
+		$vars = compact('box_class', 'type');
+		$vars['self'] = $this;
+		return Haanga::Load("link_summary.html", $vars);
+	}
+
 	function print_summary($type='full', $karma_best_comment = 0, $show_tags = true) {
 		global $current_user, $current_user, $globals, $db;
+
+		return $this->print_summary1($type, $karma_best_comment, $show_tags);
 
 		if(!$this->read) return;
 		if($this->is_votable()) {
@@ -1295,7 +1350,7 @@ class Link {
 				return $globals['base_static'] . $file;
 			} elseif ($globals['Amazon_S3_media_bucket'] && $globals['Amazon_S3_local_cache']) {
 				create_cache_dir_chain(mnmpath.'/'.$globals['cache_dir'], $chain);
-        		// Get thumbnail from S3
+				// Get thumbnail from S3
 				if (Media::get("$this->id.jpg", 'thumbs', $filepath)) {
 					return $globals['base_static'] . $file;
 				} else {
@@ -1307,7 +1362,7 @@ class Link {
 					}
 				}
 			}
-        }
+		}
 		return false;
 	}
 
