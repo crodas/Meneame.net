@@ -74,7 +74,7 @@
             {{ self.content_txt }}
             {% if (globals.link && type != 'preview' ) %}
                 {% if self.is_editable %}
-					&nbsp;&nbsp;<a href="{% get_url 'editlink.php?id=' self.id '&amp;user=' current_user.user_id %}" title="{% trans _('editar noticia') %} #{{ self.id }}"><img class="mini-icon-text" src="[% get_static_url 'img/common/edit-misc01.png' %}" alt="edit" width="18" height="12"/></a>
+					&nbsp;&nbsp;<a href="{% get_url 'editlink.php?id=' self.id '&amp;user=' current_user.user_id %}" title="{% trans _('editar noticia') %} #{{ self.id }}"><img class="mini-icon-text" src="{% get_static_url 'img/common/edit-misc01.png' %}" alt="edit" width="18" height="12"/></a>
                 {% endif %}
 
                 {% if self.geo && self.is_map_editable %}
@@ -128,13 +128,62 @@
         </span></span>
 
         {% if self.can_vote_negative %}
-            {% global anon_karma site_key %}
-            negative 
+		    <form  class="tool" action="" id="problem-{{ self.id }}">
+		    <select name="ratings"  onchange="report_problem(this.form,{{current_user.user_id}}, {{self.id}})">
+		        <option value="0" selected="selected">{% trans _('problema') %}</option>
+                {% for pkey, pvalue in globals.negative_votes_values %}
+			        <option value="{{pkey}}">{{ pvalue }}</option>
+                {% endfor %}
+		    </select>
+		    </form>
         {% endif %}
 
     </div>
 
     {% if globals.ads %}<!-- google_ad_section_end -->{% endif %}
 
+    {% if globals.link || type == 'short' %}
+        {% if show_tags && self.tags %} 
+		<div class="news-details">
+		<strong>{% trans _('etiquetas') %}</strong>:
+        {% exec explode "," self.tags as tags_array %}
+        {% for id, tag in tags_array %}
+            {% exec urlencode tag as tag_url %}
+            {% if id > 0 %}, {% endif %}
+            {% if globals.base_search_url %}
+            <a href="{% get_url globals.base_search_url "tag:" tag_url %}">
+            {% else %}
+            <a href="{% get_url "search.php?p=tag=&amp;q=" tag_url %}">
+            {% endif %}
+            {{ tag }}</a>
+        {% endfor %}
+        </div>
+        {% endif %}
+        {% if type!='short' %}
+			<div class="news-details">
+				<strong>{% trans _('negativos') %}</strong>: <span id="a-neg-{{ self.id }}">{{ self.negatives }}</span>&nbsp;&nbsp;
+				<strong>{% trans _('usuarios') %}</strong>: <span id="a-usu-{{ self.id }}">{{ self.votes }}</span>&nbsp;&nbsp;
+				<strong>{% trans _('anónimos') %}</strong>: <span id="a-ano-{{ self.id }}">{{ self.anonymous }}</span>&nbsp;&nbsp;
+				<span class="tool">
+                    {% exec self.get_short_permalink as shortlink %}
+                    <strong>
+                        <a href="{{ shortlink }}" title="{% trans _('enlace corto') %}">{% trans _('compartir') %}</a>
+                    </strong>:
+                    {% exec print_share_icons self.permalink shortlink self.title as dummy %}
+                </span>
+            </div>
+
+        {% endif %}
+    {% endif %}
+    
+    {% exec do_banner_story as dummy %}
+
 	</div>
 </div>
+
+{% if self.edit_geo %}
+	<div id="geoedit" class="geoform" style="margin-left:20px">
+        {% trans _('ubica al origen de la noticia o evento (ciudad, país)') as geotxt %}
+        {% exec geo_coder_print_form 'link', self.id, globals.latlng, geotxt as dummy %}
+    </div>
+{% endif %}

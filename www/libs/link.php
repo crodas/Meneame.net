@@ -478,6 +478,12 @@ class Link {
             $this->best_comment  = FALSE;
         }
 
+		if ($this->geo && $this->is_map_editable() && $current_user->user_id == $this->author && $this->sent_date > $globals['now'] - 600 && !$this->latlng)  {
+            $this->edit_geo = TRUE;
+        } else {
+            $this->edit_geo = FALSE;
+        }
+
 		switch ($this->status) {
 			case 'queued': // another color box for not-published
 				$box_class = 'mnm-queued';
@@ -493,7 +499,7 @@ class Link {
 				break;
 		}
 
-		$vars = compact('box_class', 'type');
+		$vars = compact('box_class', 'type', 'show_tags');
 		$vars['self'] = $this;
 		return Haanga::Load("link_summary.html", $vars);
 	}
