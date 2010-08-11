@@ -79,7 +79,7 @@ function do_tabs($tab_name, $tab_selected = false, $extra_tab = false) {
 }
 
 function do_header($title, $id='home') {
-	global $current_user, $dblang, $globals, $greetings;
+	global $current_user, $dblang, $globals;
 
 	check_auth_page();
 	header('Content-Type: text/html; charset=utf-8');
@@ -482,8 +482,9 @@ function do_vertical_tags($what=false) {
 
 	$res = $db->get_results("select lower(tag_words) as word, count(*) as count $from_where order by count desc limit 20");
 	if ($res) {
-		$output = '<div class="sidebox">';
-		$output .= '<div class="header"><h4><a href="'.$globals['base_url'].'cloud.php">'._('etiquetas').'</a></h4></div><div class="cell"><p class="tagcloud">'."\n";
+		$url = $globals['base_url'].'cloud.php';
+		$title = _('etiquetas');
+		$content = '';
 		foreach ($res as $item) {
 			$words[$item->word] = $item->count;
 			if ($item->count > $max) $max = $item->count;
@@ -493,15 +494,16 @@ function do_vertical_tags($what=false) {
 		foreach ($words as $word => $count) {
 			$size = round($min_pts + ($count-1)*$coef, 1);
 			$op = round(0.4 + 0.6*$count/$max, 2);
-			$output .= '<a style="font-size: '.$size.'pt;opacity:'.$op.'" href="';
+			$content .= '<a style="font-size: '.$size.'pt;opacity:'.$op.'" href="';
 			if ($globals['base_search_url']) {
-				$output .= $globals['base_url'].$globals['base_search_url'].'tag:';
+				$content .= $globals['base_url'].$globals['base_search_url'].'tag:';
 			} else {
-				$output .= $globals['base_url'].'search.php?p=tags&amp;q=';
+				$content .= $globals['base_url'].'search.php?p=tags&amp;q=';
 			}
-			$output .= urlencode($word).'">'.$word.'</a>  ';
+			$content .= urlencode($word).'">'.$word.'</a>  ';
 		}
-		$output .= '</p></div></div>';
+		$vars = compact('content', 'title', 'url');
+		$output = Haanga::Load('tags_sidebox.html', $vars, true);
 		echo $output;
 		memcache_madd($cache_key, $output, 600);
 	}
@@ -537,8 +539,7 @@ function do_categories_cloud($what=false, $hours = 48) {
 		if ($what == 'queued') $page = $globals['base_url'].'shakeit.php?category=';
 		else  $page = $globals['base_url'].'?category=';
 
-		$output = '<div class="sidebox">';
-		$output .= '<div class="header"><h4>'._('categorías populares').'</h4></div><div class="cell"><p class="tagcloud">'."\n";
+		$title = _('categorías populares');
 
 		$counts = array();
 		$names = array();
@@ -557,9 +558,10 @@ function do_categories_cloud($what=false, $hours = 48) {
 			$count = $counts[$id];
 			$size = round($min_pts + ($count-1)*$coef, 1);
 			$op = round(0.3 + 0.7*$count/$max, 2);
-			$output .= '<a style="font-size: '.$size.'pt;opacity:'.$op.'" href="'.$page.$id.'">'.$name.'</a> ';
+			$content .= '<a style="font-size: '.$size.'pt;opacity:'.$op.'" href="'.$page.$id.'">'.$name.'</a> ';
 		}
-		$output .= '</p></div></div>';
+		$vars = compact('content', 'title', 'url');
+		$output = Haanga::Load('tags_sidebox.html', $vars, true);
 		echo $output;
 		memcache_madd($cache_key, $output, 600);
 	}
@@ -612,14 +614,22 @@ function do_best_comments() {
 	// but a time-decreasing function applied to the number of votes
 	$res = $db->get_results("select comment_id, comment_order, user_id, user_login, user_avatar, link_id, link_uri, link_title, link_comments, comment_karma*(1-($now-unix_timestamp(comment_date))*0.7/43000) as value, link_negatives/link_votes as rel from comments, links, users  where link_date > '$link_min_date' and comment_date > '$min_date' and link_negatives/link_votes < 0.5  and comment_karma > 50 and comment_link_id = link_id and comment_user_id = user_id order by value desc limit 12");
 	if ($res) {
-		$output .= '<div class="sidebox"><div class="header"><h4><a href="'.$globals['base_url'].'topcomments.php">'._('mejores comentarios').'</a></h4></div><div class="comments"><ul>'."\n";
+		$objects = array();
+		$title = _('mejores comentarios');
+		$url = $globals['base_url'].'topcomments.php';
 		foreach ($res as $comment) {
-			$foo->id = $comment->comment_id;
-			$link = $foo->get_relative_individual_permalink();
-			$output .= '<li><img src="'.get_avatar_url($comment->user_id, $comment->user_avatar, 20).'" alt="" width="20" height="20" class="avatar"/>';
-			$output .= '<p><strong>'.$comment->user_login.'</strong> '._('en').' <a onmouseout="tooltip.clear(event);"  onclick="tooltip.clear(this);" onmouseover="return tooltip.ajax_delayed(event, \'get_comment_tooltip.php\', \''.$comment->comment_id.'\', 10000);" href="'.$link.'">'.$comment->link_title.'</a></p></li>'."\n";
+			$obj = new stdClass();
+			$obj->id = $foo->id = $comment->comment_id;
+			$obj->link = $foo->get_relative_individual_permalink();
+			$obj->user_id = $comment->user_id;
+			$obj->avatar = $comment->user_avatar;
+			$obj->title = $comment->link_title;
+			$obj->username = $comment->user_login;
+			$obj->tooltip = 'get_comment_tooltip.php';
+			array_push($objects, $obj);
 		}
-		$output .= '</ul></div></div>';
+		$vars = compact('objects', 'title', 'url');
+		$output = Haanga::Load('best_comments_posts.html', $vars, true);
 		echo $output;
 		memcache_madd($key, $output, 300);
 	}
@@ -648,14 +658,22 @@ function do_best_story_comments($link) {
 	$limit = min(15, intval($link->comments/5));
 	$res = $db->get_results("select $sql_cache comment_id, comment_order, user_id, user_login, user_avatar, comment_content as content from comments, users  where comment_link_id = $link->id and comment_karma > 30 and comment_user_id = user_id order by comment_karma desc limit $limit");
 	if ($res) {
-		$output .= '<div class="sidebox"><div class="header"><h4><a href="'.$link->get_relative_permalink().'/best-comments">'._('mejores comentarios').'</a></h4></div><div class="comments"><ul>'."\n";
+		$objects = array();
+		$title = _('mejores comentarios');
+		$url = $link->get_relative_permalink().'/best-comments';
 		foreach ($res as $comment) {
-			$url = $link->get_relative_permalink().'/000'.$comment->comment_order;
-			$comment->content = text_to_summary($comment->content, 75);
-			$output .= '<li><img src="'.get_avatar_url($comment->user_id, $comment->user_avatar, 20).'" alt="" width="20" height="20" class="avatar"/>';
-			$output .= '<p><strong>'.$comment->user_login.':</strong> <a onmouseout="tooltip.clear(event);"  onclick="tooltip.clear(this);" onmouseover="return tooltip.ajax_delayed(event, \'get_comment_tooltip.php\', \''.$comment->comment_id.'\', 10000);" href="'.$url.'"><em>'.text_to_summary($comment->content, 60).'</em></a></p></li>'."\n";
+			$obj = new stdClass();
+			$obj->id = $comment->comment_id;
+			$obj->link = $link->get_relative_permalink().'/000'.$comment->comment_order;
+			$obj->user_id = $comment->user_id;
+			$obj->avatar = $comment->user_avatar;
+			$obj->title = text_to_summary($comment->content, 75);
+			$obj->username = $comment->user_login;
+			$obj->tooltip = 'get_comment_tooltip.php';
+			array_push($objects, $obj);
 		}
-		$output .= '</ul></div></div>';
+		$vars = compact('objects', 'title', 'url');
+		$output = Haanga::Load('best_comments_posts.html', $vars, true);
 		echo $output;
 		if($do_cache) {
 			memcache_madd($key, $output, 300);
@@ -671,8 +689,6 @@ function do_best_stories() {
 	$key = 'best_stories_'.$globals['css_main'].'_'.$globals['meta_current'];
 	if(memcache_mprint($key)) return;
 
-	$foo_link = new Link();
-
 	if ($globals['meta_current'] && $globals['meta_categories']) {
 			$category_list = 'and link_category in ('.$globals['meta_categories'].')';
 			$title = sprintf(_('populares de «%s»'), $globals['meta_current_name']);
@@ -680,31 +696,29 @@ function do_best_stories() {
 		$category_list  = '';
 		$title = _('populares');
 	}
-	$output = '<div class="sidebox"><div class="header"><h4><a href="'.$globals['base_url'].'topstories.php">'.$title.'</a></h4></div>';
 
 	$min_date = date("Y-m-d H:i:00", $globals['now'] - 129600); // 36 hours 
 	// The order is not exactly the votes
 	// but a time-decreasing function applied to the number of votes
 	$res = $db->get_results("select link_id, (link_votes-link_negatives*2)*(1-(unix_timestamp(now())-unix_timestamp(link_date))*0.8/129600) as value from links where link_status='published' $category_list and link_date > '$min_date' order by value desc limit 10");
 	if ($res) {
+		$links = array();
+		$url = $globals['base_url'].'topstories.php';
 		$link = new Link();
 		foreach ($res as $l) {
-			$output .= '<div class="cell">';
-			$link->id = $l->link_id;
-			$link->read();
-			$url = $link->get_relative_permalink();
-			$thumb = $link->has_thumb();
-			$output .= '<div class="votes">'.($link->votes+$link->anonymous).'</div>';
-			if ($thumb) {
+			$link = Link::from_db($l->link_id);
+			$link->url = $link->get_relative_permalink();
+			$link->thumb = $link->has_thumb();
+			$link->total_votes = $link->votes+$link->anonymous;
+			if ($link->thumb) {
 				$link->thumb_x = round($link->thumb_x / 2);
 				$link->thumb_y = round($link->thumb_y / 2);
-				$output .= "<img src='$thumb' width='$link->thumb_x' height='$link->thumb_y' alt='' class='thumbnail'/>";
 			}
-			$output .= '<h5><a href="'.$url.'">'.$link->title.'</a></h5>';
-			$output .= '</div>'; // class="cell";
-
+			if ($link->negatives >= $link->votes/10) $link->warn = true;
+			array_push($links, $link);
 		}
-		$output .= '</div>'."\n";
+		$vars = compact('links', 'title', 'url');
+		$output = Haanga::Load('best_stories.html', $vars, true);
 		echo $output;
 		memcache_madd($key, $output, 180);
 	}
@@ -714,8 +728,6 @@ function do_best_queued() {
 	global $db, $globals, $dblang;
 
 	if ($globals['mobile']) return;
-
-	$foo_link = new Link();
 
 	$key = 'best_queued_'.$globals['css_main'].'_'.$globals['meta_current'];
 	if(memcache_mprint($key)) return;
@@ -728,36 +740,29 @@ function do_best_queued() {
 		$title = _('candidatas');
 	}
 
-	$output = '<div class="sidebox"><div class="header"><h4><a href="'.$globals['base_url'].'promote.php">'.$title.'</a></h4></div>';
-
+	
 	$min_date = date("Y-m-d H:i:00", $globals['now'] - 86400*4); // 4 days
 	// The order is not exactly the votes
 	// but a time-decreasing function applied to the number of votes
 	$res = $db->get_results("select link_id from links where link_status='queued' and link_date > '$min_date' $category_list order by link_karma desc limit 15");
 	if ($res) {
+		$url = $globals['base_url'].'promote.php';
+		$links = array();
 		$link = new Link();
 		foreach ($res as $l) {
-			$output .= '<div class="cell">';
-			$link->id = $l->link_id;
-			$link->read();
-			$url = $link->get_relative_permalink();
-			$output .= '<div class="votes queued">'.($link->votes+$link->anonymous).'</div>';
-			if ($link->negatives >= $link->votes/10) {
-				// add the warn icon if it has 10% negatives
-				$warn = 'style="padding-left:20px;background: url(../../img/common/error_s.png) no-repeat left center"';
-			} else {
-				$warn = '';
-				// Show the thumbnail only if it has less than 10% negatives
-				if (($thumb = $link->has_thumb())) {
-					$link->thumb_x = round($link->thumb_x / 2);
-					$link->thumb_y = round($link->thumb_y / 2);
-					$output .= "<img src='$thumb' width='$link->thumb_x' height='$link->thumb_y' alt='' class='thumbnail'/>";
-				}
+			$link = Link::from_db($l->link_id);
+			$link->url = $link->get_relative_permalink();
+			$link->thumb = $link->has_thumb();
+			$link->total_votes = $link->votes+$link->anonymous;
+			if ($link->thumb) {
+				$link->thumb_x = round($link->thumb_x / 2);
+				$link->thumb_y = round($link->thumb_y / 2);
 			}
-			$output .= '<h5 '.$warn.'><a href="'.$url.'">'.$link->title.'</a></h5>';
-			$output .= '</div>'; // class="cell";
+			if ($link->negatives >= $link->votes/10) $link->warn = true;
+			array_push($links, $link);
 		}
-		$output .= '</div>'."\n";
+		$vars = compact('links', 'title', 'url');
+		$output = Haanga::Load('best_stories.html', $vars, true);
 		echo $output;
 		memcache_madd($key, $output, 180);
 	}
@@ -776,15 +781,25 @@ function do_best_posts() {
 	$min_date = date("Y-m-d H:i:00", $globals['now'] - 86400); // about 24 hours
 	$res = $db->get_results("select post_id from posts, users where post_date > '$min_date' and  post_user_id = user_id and post_karma > 0 order by post_karma desc limit 10");
 	if ($res) {
-		$output .= '<div class="sidebox"><div class="header"><h4><a href="'.post_get_base_url('_best').'">'._('mejores notas').'</a></h4></div><div class="comments"><ul>'."\n";
+		$objects = array();
+		$title = _('mejores notas');
+		$url = post_get_base_url('_best');
 		foreach ($res as $p) {
+			$obj = new stdClass();
 			$post = new Post;
 			$post->id = $p->post_id;
 			$post->read();
-			$output .= '<li><img src="'.get_avatar_url($post->author, $post->avatar, 20).'" alt="" width="20" height="20" class="avatar"/>';
-			$output .= '<p><strong>'.$post->username.'</strong>: <a onmouseout="tooltip.clear(event);"  onclick="tooltip.clear(this);" onmouseover="return tooltip.ajax_delayed(event, \'get_post_tooltip.php\', \''.$post->id.'\', 10000);" href="'.post_get_base_url($post->username).'/'.$post->id.'"><em>'.text_to_summary($post->clean_content(), 80).'</em></a></p></li>'."\n";
+			$obj->id = $post->id;
+			$obj->link = post_get_base_url($post->username).'/'.$post->id;
+			$obj->user_id = $post->author;
+			$obj->avatar = $post->avatar;
+			$obj->title = text_to_summary($post->clean_content(), 80);
+			$obj->username = $post->username;
+			$obj->tooltip = 'get_post_tooltip.php';
+			array_push($objects, $obj);
 		}
-		$output .= '</ul></div></div>';
+		$vars = compact('objects', 'title', 'url');
+		$output = Haanga::Load('best_comments_posts.html', $vars, true);
 		echo $output;
 		memcache_madd($key, $output, 300);
 	}
