@@ -453,36 +453,45 @@ class Link {
 			if (!$this->voted) $this->md5 = md5($current_user->user_id.$this->id.$this->randkey.$globals['user_ip']);
 		}
 
-        $this->total_votes   = $this->votes + $this->anonymous;
-		$this->permalink     = $this->get_permalink();
-		$this->rpermalink    = $this->get_relative_permalink();
+		$this->total_votes   = $this->votes + $this->anonymous;
+		$this->permalink	 = $this->get_permalink();
+		$this->rpermalink	= $this->get_relative_permalink();
 		$this->show_shakebox = $type != 'preview' && $this->title && $this->content 
 				&& ($this->votes > 0 || $current_user->user_id == $this->author);
-        $this->has_warning   = !(!$this->check_warn() || $this->is_discarded());
-        $this->is_editable   = $this->is_editable();
-        $this->url_str       = htmlentities(preg_replace('/^https*:\/\//', '', txt_shorter($this->url)));
-        $this->username_str  = ' <a href="'.get_user_uri($this->username, 'history').'">'.$this->username.'</a> ';
-        $this->print_date    = $globals['now'] - $this->date > 604800 || empty($_SERVER['HTTP_USER_AGENT']); // 7 days or user agent is empty
-        $this->thumb_url     = $this->has_thumb();
-        $this->content_txt   = text_to_html($this->content, 'links');
-        $this->is_editable   = $this->is_editable();
-        $this->is_map_editable = $this->is_map_editable();
-        $this->can_vote_negative = !$this->voted && $this->votes_enabled &&
+		$this->has_warning   = !(!$this->check_warn() || $this->is_discarded());
+		$this->is_editable   = $this->is_editable();
+		$this->url_str	   = htmlentities(preg_replace('/^https*:\/\//', '', txt_shorter($this->url)));
+		$this->username_str  = ' <a href="'.get_user_uri($this->username, 'history').'">'.$this->username.'</a> ';
+		$this->print_date	= $globals['now'] - $this->date > 604800 || empty($_SERVER['HTTP_USER_AGENT']); // 7 days or user agent is empty
+		$this->thumb_url	 = $this->has_thumb();
+		$this->content_txt   = text_to_html($this->content, 'links');
+		$this->is_editable   = $this->is_editable();
+		$this->is_map_editable = $this->is_map_editable();
+		$this->can_vote_negative = !$this->voted && $this->votes_enabled &&
 				$this->negatives_allowed($globals['link_id'] > 0) && 
 				$type != 'preview';
 
 
-        if ($karma_best_comment > 0 && $this->comments > 0 && $this->comments < 50 && $globals['now'] - $this->date < 86400) {
-            $this->best_comment = $db->get_row("select SQL_CACHE comment_id, comment_order, substr(comment_content, 1, 225) as content from comments where comment_link_id = $this->id and comment_karma > $karma_best_comment and comment_votes > 0 order by comment_karma desc limit 1");
-        } else {
-            $this->best_comment  = FALSE;
+        if ($this->status == 'abuse' || $this->has_warning) {
+            $this->negative_text = FALSE;
+			$negatives = $db->get_row("select SQL_CACHE vote_value, count(vote_value) as count from votes where vote_type='links' and vote_link_id=$this->id and vote_value < 0 group by vote_value order by count desc limit 1");
+
+			if ($negatives->count > 2 && $negatives->count >= $this->negatives/2 && ($negatives->vote_value == -6 || $negatives->vote_value == -8)) {
+                $this->negative_text = get_negative_vote($negatives->vote_value);
+            }
         }
 
+		if ($karma_best_comment > 0 && $this->comments > 0 && $this->comments < 50 && $globals['now'] - $this->date < 86400) {
+			$this->best_comment = $db->get_row("select SQL_CACHE comment_id, comment_order, substr(comment_content, 1, 225) as content from comments where comment_link_id = $this->id and comment_karma > $karma_best_comment and comment_votes > 0 order by comment_karma desc limit 1");
+		} else {
+			$this->best_comment  = FALSE;
+		}
+
 		if ($this->geo && $this->is_map_editable() && $current_user->user_id == $this->author && $this->sent_date > $globals['now'] - 600 && !$this->latlng)  {
-            $this->edit_geo = TRUE;
-        } else {
-            $this->edit_geo = FALSE;
-        }
+			$this->edit_geo = TRUE;
+		} else {
+			$this->edit_geo = FALSE;
+		}
 
 		switch ($this->status) {
 			case 'queued': // another color box for not-published
@@ -559,7 +568,6 @@ class Link {
 			if($this->status == 'published')
 				echo ', '  ._('publicado el').get_date_time($this->date);
 		} else {
-			echo _('hace').txt_time_diff($this->sent_date);
 			if($this->status == 'published')
 				echo ', '  ._('publicado hace').txt_time_diff($this->date);
 		}
