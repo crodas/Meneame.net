@@ -27,7 +27,6 @@ class GPlusOAuth extends OAuthBase {
 	function __construct() {
 		global $globals;
 
-		$server = 'https://accounts.google.com';
 		$this->request_token_url = "https://www.google.com/accounts/OAuthGetRequestToken";
 		$this->access_token_url = "https://www.google.com/accounts/OAuthGetAccessToken";
 		$this->authorize_url =  "https://www.google.com/accounts/OAuthAuthorizeToken";
@@ -44,12 +43,12 @@ class GPlusOAuth extends OAuthBase {
 	function authRequest() {
 		global $globals;
 		try {
-            $args    = array(
-                'scope' => "https://www.googleapis.com/auth/plus.me",
-                'xoauth_displayname' => 'Menéame'
-            );
-            $nextUrl = 'http://'.get_server_name().$globals['base_url'].'oauth/signin.php?service=gplus';
-            $reqUrl  = $this->request_token_url . '?' . http_build_query($args);
+			$args	= array(
+				'scope' => "https://www.googleapis.com/auth/plus.me",
+				'xoauth_displayname' => 'Menéame'
+			);
+			$nextUrl = 'http://'.get_server_name().$globals['base_url'].'oauth/signin.php?service=gplus';
+			$reqUrl  = $this->request_token_url . '?' . http_build_query($args);
 			if (($request_token_info = $this->oauth->getRequestToken($reqUrl, $nextUrl))) {
 				// if [oauth_callback_confirmed] => true then is oauth 1.0a
 				setcookie('oauth_token', $request_token_info['oauth_token'], 0);
@@ -98,10 +97,13 @@ class GPlusOAuth extends OAuthBase {
 			if($data){
 				$response_info = $this->oauth->getLastResponse();
 				$response = json_decode($response_info);
-                var_dump($response);exit;
-				$this->url = $response->url;
-				$this->names = $response->name;
-				$this->avatar = $response->profile_image_url;
+				foreach ($response->urls as $url) {
+					if (!empty($url->type) && $url->type == 'profile') {
+						$this->url = $url->value;
+					}
+				}
+				$this->names = $response->displayName;
+				$this->avatar = $response->image->url;
 			}
 			$db->transaction();
 			$this->store_user();
